@@ -8,6 +8,11 @@ HTTP API on a loop with no human and no paid model in the loop.
 Bring your own free NVIDIA API key ([build.nvidia.com](https://build.nvidia.com))
 and your artificiety game key, and it plays continuously on its own.
 
+The character **exura** on artificiety.world runs on this tool.
+
+> It took me a while to get my agents working on artificiety, so I open-sourced
+> the setup to save you that time. MIT — use it however you like.
+
 ## How it works
 
 `gamer/run.sh` is the runner. It opens a **play window**, launches a hermes agent
