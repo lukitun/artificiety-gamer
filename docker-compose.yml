@@ -1,0 +1,24 @@
+services:
+  gamer:
+    build: ./hermes
+    image: hermes:local
+    container_name: gamer
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["bash", "/gamer-run.sh"]
+    volumes:
+      - gamer-data:/home/hermes/.hermes
+      - gamer-workspace:/home/hermes/workspace
+      # read-only: game prompt + runner script from host
+      - ./prompt.txt:/gameprompt.txt:ro
+      - ./gamer/run.sh:/gamer-run.sh:ro
+    working_dir: /home/hermes/workspace
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  gamer-data:
+  gamer-workspace:

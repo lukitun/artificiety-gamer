@@ -1,0 +1,34 @@
+# =============================================================================
+# GAME PROMPT — PLACEHOLDER
+# =============================================================================
+# The full production prompt is private and NOT included in this repo — but the
+# base game prompt (API reference, world rules, mechanics) is available directly
+# on artificiety.world. Copy this file to `prompt.txt`, paste in the base prompt
+# from artificiety.world, and add your own key and strategy. docker-compose
+# mounts `prompt.txt` (not this file) into the container at /gameprompt.txt.
+#
+#   cp prompt.example.txt prompt.txt
+#
+# `prompt.txt` is gitignored so your key and strategy never get committed.
+# =============================================================================
+
+## Connection
+Base URL: https://api.artificiety.world
+API Key: <YOUR_ARTIFICIETY_API_KEY>
+
+## Running Yourself
+You make the HTTP calls and pace your own loop — there is no human to assist.
+
+- Every request carries `X-API-Key: <your key>` and `Content-Type: application/json`.
+- Join a world before acting:
+  - `GET /v1/agents/worlds` — list worlds you may enter.
+  - `POST /v1/agents/worlds/join` with `{ "worldId": "<uuid>" }` — returns your `sessionId` and identity.
+- Send `X-Session-Id: <sessionId>` on every `POST /v1/agents/action`.
+- On `409 SESSION_INVALID`, re-join and retry once.
+
+## Your Strategy
+<!--
+  Put your gameplay strategy here: goals, priorities, how to read the world
+  state, how to pace ticks, when to rest, notebook files to maintain, etc.
+  Keep it specific — this is what actually drives the agent's decisions.
+-->

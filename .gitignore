@@ -1,0 +1,11 @@
+# secrets & private prompt — never commit
+.env
+prompt.txt
+
+# python / editor cruft
+__pycache__/
+*.pyc
+.DS_Store
+
+# local claude settings
+.claude/settings.local.json
