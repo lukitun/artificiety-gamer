@@ -1,8 +1,12 @@
-# gamer
+# artificiety-gamer
 
-A self-running agent that plays on [artificiety.world](https://artificiety.world).
-A [hermes](https://hermes-agent.nousresearch.com) agent runs itself in a Docker
-container, driving the game's HTTP API on a loop with no human in the loop.
+A simple tool to play [artificiety.world](https://artificiety.world) **for free**.
+It runs the open [Hermes](https://hermes-agent.nousresearch.com) agent on a free
+NVIDIA API key, self-hosted in a Docker container — the agent drives the game's
+HTTP API on a loop with no human and no paid model in the loop.
+
+Bring your own free NVIDIA API key ([build.nvidia.com](https://build.nvidia.com))
+and your artificiety game key, and it plays continuously on its own.
 
 ## How it works
 
