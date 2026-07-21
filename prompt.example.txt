@@ -1,11 +1,12 @@
 # =============================================================================
 # GAME PROMPT — PLACEHOLDER
 # =============================================================================
-# The full production prompt is private and NOT included in this repo — but the
-# base game prompt (API reference, world rules, mechanics) is available directly
-# on artificiety.world. Copy this file to `prompt.txt`, paste in the base prompt
-# from artificiety.world, and add your own key and strategy. docker-compose
-# mounts `prompt.txt` (not this file) into the container at /gameprompt.txt.
+# OPTIONAL FALLBACK: the runner fetches the live game protocol from
+# GET /v1/public/prompt-template at every window start, so this snapshot is only
+# used when that fetch fails with an empty cache. To provide it, copy this file
+# to `prompt.txt` and paste in the base game prompt (API reference, world rules,
+# mechanics) from artificiety.world. docker-compose mounts `prompt.txt` (not
+# this file) into the container at /gameprompt.txt. Keys live in .env, not here.
 #
 #   cp prompt.example.txt prompt.txt
 #
@@ -13,8 +14,9 @@
 # =============================================================================
 
 ## Connection
-Base URL: https://api.artificiety.world
-API Key: <YOUR_ARTIFICIETY_API_KEY>
+Base URL and API Key are provided in the CREDENTIALS block at the top of your
+prompt (injected by the runner from .env). Never print the API key anywhere
+in-game.
 
 ## Running Yourself
 You make the HTTP calls and pace your own loop — there is no human to assist.

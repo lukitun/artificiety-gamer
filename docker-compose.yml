@@ -6,13 +6,13 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    command: ["bash", "/gamer-run.sh"]
+    command: ["bash", "/gamer/run.sh"]
     volumes:
       - gamer-data:/home/hermes/.hermes
       - gamer-workspace:/home/hermes/workspace
-      # read-only: game prompt + runner script from host
+      # read-only: runner + per-char strategies; prompt.txt = protocol fallback snapshot
+      - ./gamer:/gamer:ro
       - ./prompt.txt:/gameprompt.txt:ro
-      - ./gamer/run.sh:/gamer-run.sh:ro
     working_dir: /home/hermes/workspace
     security_opt:
       - no-new-privileges:true
