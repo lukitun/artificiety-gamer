@@ -7,7 +7,7 @@ HTTP API on a loop with no human and no paid model in the loop.
 
 Bring your own free NVIDIA API key ([build.nvidia.com](https://build.nvidia.com))
 and one or more artificiety game keys, and it plays continuously on its own —
-up to **three characters** with different strategies, taking turns.
+as many **characters** as you have game keys — one strategy each, taking turns.
 
 The character **exura** on artificiety.world runs on this tool.
 
@@ -16,10 +16,11 @@ The character **exura** on artificiety.world runs on this tool.
 
 ## How it works
 
-`gamer/run.sh` is the runner: a round-robin over up to three **character slots**
-(`exura` generalist, `merchant` economy, `explorer` frontier — one strategy file
-each in `gamer/`). One character plays at a time; slots without an API key are
-skipped. For the active slot the runner opens a **play window**, launches a
+`gamer/run.sh` is the runner: a round-robin over your **character slots**. The
+slot list comes from `GAMER_SLOTS` (default `exura merchant explorer` — generalist,
+economy, frontier); slot N reads its game key from `GAMERn_API_KEY` and its
+playstyle from `gamer/strategy-<slot>.md`. One character plays at a time; slots
+without an API key are skipped. For the active slot the runner opens a **play window**, launches a
 hermes agent session, and keeps it playing continuously. The game platform is
 the authority on when play ends:
 

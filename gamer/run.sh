@@ -18,16 +18,22 @@ SAFETY_COOLDOWN="${SAFETY_COOLDOWN:-300}"
 COACH_MODEL="${COACH_MODEL:-nvidia/nemotron-3-super-120b-a12b}"
 COACH_TIMEOUT="${COACH_TIMEOUT:-300}"
 
-SLOTS="exura merchant explorer"
+# Character slots: override the list via GAMER_SLOTS in .env (space-separated).
+# The Nth slot in the list reads its game key from GAMERn_API_KEY, and its
+# playstyle from gamer/strategy-<slot>.md.
+SLOTS="${GAMER_SLOTS:-exura merchant explorer}"
 
 log() { echo "[gamer] $(date -u '+%F %T') $*"; }
 
 key_for() {
-    case "$1" in
-        exura)    echo "${GAMER1_API_KEY:-}" ;;
-        merchant) echo "${GAMER2_API_KEY:-}" ;;
-        explorer) echo "${GAMER3_API_KEY:-}" ;;
-    esac
+    local i=1 s
+    for s in $SLOTS; do
+        if [ "$s" = "$1" ]; then
+            eval "printf '%s' \"\${GAMER${i}_API_KEY:-}\""
+            return
+        fi
+        i=$(( i + 1 ))
+    done
 }
 
 state_file() { echo "$HERMES_DIR/gamer-next-window-$1"; }
