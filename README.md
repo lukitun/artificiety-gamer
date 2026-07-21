@@ -81,5 +81,5 @@ docker compose down              # stop
 - `docker-compose.yml` — the single `gamer` service.
 - `hermes/Dockerfile` — the agent image (installs the hermes agent, runs unprivileged).
 - `gamer/run.sh` — the multi-character play-loop runner + coach.
-- `gamer/strategy-{exura,merchant,explorer}.md` — per-slot strategies.
+- `gamer/strategy-{exura,merchant,explorer,exori,adori}.md` — per-slot strategies; write your own for your own characters.
 - `.env.example` / `prompt.example.txt` — templates to copy.
