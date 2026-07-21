@@ -78,6 +78,8 @@ build_prompt() {
     printf 'YOUR NOTEBOOK DIRECTORY is %s — every notebook file below lives there; read and write them with absolute paths.\n\n' "$dir"
     printf '=== YOUR STRATEGY (this defines your playstyle — it outranks generic advice) ===\n'
     cap_file "/gamer/strategy-$slot.md" 12000
+    printf '\n=== SHARED WORLD FACTS (verified by all characters on this runner) ===\n'
+    cap_file "/gamer/WORLD_FACTS.md" 6000
     printf '\n=== YOUR NOTEBOOK (distilled from your own past sessions — trust and use it) ===\n'
     printf '\n--- GAME_GOALS.md ---\n';  cap_file "$dir/GAME_GOALS.md" 4000
     printf '\n--- GOTCHAS.md ---\n';     cap_file "$dir/GOTCHAS.md" 4000
@@ -104,20 +106,47 @@ rotate_logs() {
     fi
 }
 
+# hermes -z prints only the agent's final message; the real gameplay (tool
+# calls, observations) lives in the session store. Export the newest session's
+# transcript so the coach has actual material to distill.
+capture_transcript() {
+    local slot="$1"
+    local dir="$WS/$slot" sid
+    sid=$(hermes sessions list 2>/dev/null | awk 'NR==3 {print $NF}')
+    [ -n "$sid" ] || { log "slot $slot: no session id found — transcript skipped"; return; }
+    if hermes sessions export --session-id "$sid" - 2>/dev/null | tail -c 300000 > "$dir/LAST_SESSION_TRANSCRIPT.jsonl"; then
+        log "slot $slot: transcript $sid captured ($(wc -c < "$dir/LAST_SESSION_TRANSCRIPT.jsonl") bytes)"
+    else
+        log "slot $slot: transcript export failed"
+    fi
+}
+
 run_coach() {
     local slot="$1"
     local dir="$WS/$slot"
-    [ -s "$dir/LAST_SESSION_OUTPUT.txt" ] || { log "slot $slot: no session output — coach skipped"; return; }
-    log "slot $slot: coach ($COACH_MODEL) distilling session"
-    timeout "$COACH_TIMEOUT" hermes -m "$COACH_MODEL" -z "You are the strategy coach for a game-playing agent. FILES ONLY — you are FORBIDDEN from making any HTTP/network calls; do not touch the game API. Work only inside $dir using your file tools.
+    [ -s "$dir/LAST_SESSION_OUTPUT.txt" ] || [ -s "$dir/LAST_SESSION_TRANSCRIPT.jsonl" ] || { log "slot $slot: no session output — coach skipped"; return; }
+    local attempt
+    for attempt in 1 2; do
+        log "slot $slot: coach ($COACH_MODEL) distilling session (attempt $attempt)"
+        timeout "$COACH_TIMEOUT" hermes -m "$COACH_MODEL" -z "You are the strategy coach for a game-playing agent. FILES ONLY — you are FORBIDDEN from making any HTTP/network calls; do not touch the game API. Work only inside $dir using your file tools.
 
-Read $dir/LAST_SESSION_OUTPUT.txt (the agent's latest session) plus the existing notebooks GAME_GOALS.md, PLAYBOOK.md, GOTCHAS.md, SESSION_LOG.md in that directory. Then rewrite:
+Evidence to read, in order:
+- $dir/LAST_SESSION_TRANSCRIPT.jsonl — the session transcript (JSONL of messages and tool calls; start may be truncated). This is the primary evidence. If it is large, read the tail first — how the session ended matters most.
+- $dir/LAST_SESSION_OUTPUT.txt — only the agent's final message (often near-empty; a session that produced no final message crashed or was cut off — note that in the log entry).
+- The existing notebooks GAME_GOALS.md, PLAYBOOK.md, GOTCHAS.md, SESSION_LOG.md in that directory.
+
+Then REWRITE THE FILES ON DISK with your file-editing tools — printing analysis as chat text does nothing and counts as total failure:
 - $dir/PLAYBOOK.md — strategies that VERIFIABLY worked or failed in actual sessions, max 120 lines, prune anything stale or speculative.
 - $dir/GOTCHAS.md — hard-won mechanical facts, deduplicated, max 60 lines.
 - $dir/GAME_GOALS.md — a concrete plan for the NEXT session, max 40 lines, MUST end with a line starting exactly 'EXACT FIRST ACTION:'.
 Also append a 3-6 line dated entry to $dir/SESSION_LOG.md summarizing what happened and what was learned. Be ruthless: keep only what changes future decisions. When done, print COACH_DONE." >> "$dir/coach.log" 2>&1
-    local rc=$?
-    [ "$rc" -eq 0 ] && log "slot $slot: coach finished" || log "slot $slot: coach failed (rc=$rc) — continuing"
+        if [ "$dir/GAME_GOALS.md" -nt "$dir/LAST_SESSION_OUTPUT.txt" ]; then
+            log "slot $slot: coach finished (notebooks updated)"
+            return
+        fi
+        log "slot $slot: coach did not update notebooks (attempt $attempt)"
+    done
+    log "slot $slot: coach FAILED to write notebooks after 2 attempts — continuing"
 }
 
 play_window() {
@@ -138,7 +167,8 @@ play_window() {
         rc=$?
         printf '%s\n' "$out"
         printf '%s\n' "$out" > "$dir/LAST_SESSION_OUTPUT.txt"
-        { printf '\n===== %s session %s =====\n' "$slot" "$(date -u '+%F %T')"; printf '%s\n' "$out"; } >> "$dir/SESSION_OUTPUT_ARCHIVE.txt"
+        { printf '\n===== %s session %s (exit %s) =====\n' "$slot" "$(date -u '+%F %T')" "$rc"; printf '%s\n' "$out"; } >> "$dir/SESSION_OUTPUT_ARCHIVE.txt"
+        capture_transcript "$slot"
         if printf '%s' "$out" | grep -q 'PLAYTIME_EXHAUSTED'; then
             log "slot $slot: platform reports play-time exhausted"
             exhausted=1
@@ -162,6 +192,8 @@ play_window() {
     fi
     run_coach "$slot"
     rotate_logs "$dir"
+    # keep the session store bounded (transcripts of game sessions are large)
+    hermes sessions prune --older-than 14 -y >/dev/null 2>&1
 }
 
 for s in $SLOTS; do
@@ -171,12 +203,19 @@ done
 while true; do
     now=$(date +%s)
     pick=""
+    pick_t=0
     soonest=0
+    # among slots whose window is due, play the LEAST-RECENTLY-SCHEDULED one
+    # (never-played slots have t=0 and go first) — list order alone would let
+    # a slot that keeps exiting via the safety cap starve everyone behind it
     for s in $SLOTS; do
         [ -z "$(key_for "$s")" ] && continue
         t=$(read_state "$s")
-        if [ "$t" -le "$now" ]; then pick="$s"; break; fi
-        if [ "$soonest" -eq 0 ] || [ "$t" -lt "$soonest" ]; then soonest="$t"; fi
+        if [ "$t" -le "$now" ]; then
+            if [ -z "$pick" ] || [ "$t" -lt "$pick_t" ]; then pick="$s"; pick_t="$t"; fi
+        elif [ "$soonest" -eq 0 ] || [ "$t" -lt "$soonest" ]; then
+            soonest="$t"
+        fi
     done
     if [ -n "$pick" ]; then
         play_window "$pick" "$(key_for "$pick")"
