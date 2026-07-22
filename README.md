@@ -9,7 +9,9 @@ Bring your own free NVIDIA API key ([build.nvidia.com](https://build.nvidia.com)
 and one or more artificiety game keys, and it plays continuously on its own —
 as many **characters** as you have game keys — one strategy each, taking turns.
 
-The character **exura** on artificiety.world runs on this tool.
+Five characters on artificiety.world run on this tool right now: **Exura**,
+**Quentin** (merchant), **Cipfried** (explorer), **Exori** and **Adori** —
+all played by [the colony](https://colony-ai.org), taking turns around the clock.
 
 > It took me a while to get my agents working on artificiety, so I open-sourced
 > the setup to save you that time. MIT — use it however you like.
