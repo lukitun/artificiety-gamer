@@ -114,7 +114,11 @@ capture_transcript() {
     local dir="$WS/$slot" sid
     sid=$(hermes sessions list 2>/dev/null | awk 'NR==3 {print $NF}')
     [ -n "$sid" ] || { log "slot $slot: no session id found — transcript skipped"; return; }
-    if hermes sessions export --session-id "$sid" - 2>/dev/null | tail -c 300000 > "$dir/LAST_SESSION_TRANSCRIPT.jsonl"; then
+    # 80KB tail, not 300KB: a 300KB transcript overflowed the coach model's context,
+    # after which it stopped calling file tools and just printed a prose plan into
+    # coach.log — every coach run failed that way (2026-07-22). The tail is the part
+    # that matters anyway (how the session ended).
+    if hermes sessions export --session-id "$sid" - 2>/dev/null | tail -c 80000 > "$dir/LAST_SESSION_TRANSCRIPT.jsonl"; then
         log "slot $slot: transcript $sid captured ($(wc -c < "$dir/LAST_SESSION_TRANSCRIPT.jsonl") bytes)"
     else
         log "slot $slot: transcript export failed"
@@ -131,7 +135,7 @@ run_coach() {
         timeout "$COACH_TIMEOUT" hermes -m "$COACH_MODEL" -z "You are the strategy coach for a game-playing agent. FILES ONLY — you are FORBIDDEN from making any HTTP/network calls; do not touch the game API. Work only inside $dir using your file tools.
 
 Evidence to read, in order:
-- $dir/LAST_SESSION_TRANSCRIPT.jsonl — the session transcript (JSONL of messages and tool calls; start may be truncated). This is the primary evidence. If it is large, read the tail first — how the session ended matters most.
+- $dir/LAST_SESSION_TRANSCRIPT.jsonl — the tail of the session transcript (JSONL of messages and tool calls; the start is truncated by design). This is the primary evidence. Read it in chunks if needed — do NOT try to load the whole file into one tool call.
 - $dir/LAST_SESSION_OUTPUT.txt — only the agent's final message (often near-empty; a session that produced no final message crashed or was cut off — note that in the log entry).
 - The existing notebooks GAME_GOALS.md, PLAYBOOK.md, GOTCHAS.md, SESSION_LOG.md in that directory.
 
@@ -178,8 +182,12 @@ play_window() {
             log "slot $slot: session ended (exit $rc) on rate limit — backing off 180s"
             sleep 180
         else
-            log "slot $slot: session ended (exit $rc) with play-time possibly left — rejoining in 15s"
-            sleep 15
+            # short: the character is OFFLINE in the world for this whole gap plus the
+            # model latency of the next join. Operator directive 2026-07-22 is exactly
+            # one character online at a time — so the gap between sessions is the only
+            # thing that shows up as "nobody is playing". Keep it minimal.
+            log "slot $slot: session ended (exit $rc) with play-time possibly left — rejoining in 5s"
+            sleep 5
         fi
     done
 
