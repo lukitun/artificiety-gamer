@@ -178,8 +178,8 @@ play_window() {
             log "slot $slot: session ended (exit $rc) on rate limit — backing off 180s"
             sleep 180
         else
-            log "slot $slot: session ended (exit $rc) with play-time possibly left — rejoining in 60s"
-            sleep 60
+            log "slot $slot: session ended (exit $rc) with play-time possibly left — rejoining in 15s"
+            sleep 15
         fi
     done
 
@@ -190,10 +190,14 @@ play_window() {
         echo $(( $(date +%s) + SAFETY_COOLDOWN )) > "$(state_file "$slot")"
         log "slot $slot: safety cap hit (platform still allows play) — retry in ${SAFETY_COOLDOWN}s"
     fi
-    run_coach "$slot"
-    rotate_logs "$dir"
-    # keep the session store bounded (transcripts of game sessions are large)
-    hermes sessions prune --older-than 14 -y >/dev/null 2>&1
+    # post-window bookkeeping runs in the BACKGROUND so the next ready character
+    # starts playing immediately — keeps someone online instead of a coach-length gap
+    (
+        run_coach "$slot"
+        rotate_logs "$dir"
+        # keep the session store bounded (transcripts of game sessions are large)
+        hermes sessions prune --older-than 14 -y >/dev/null 2>&1
+    ) &
 }
 
 for s in $SLOTS; do
