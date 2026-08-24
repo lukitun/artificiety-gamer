@@ -33,6 +33,8 @@ this is the shared physics.
 ## Play-time budget
 - The daily play-time budget is REAL and enforced by the platform — contextHint warns as it approaches, then actions get rejected and re-joins are refused. It can even be already-exhausted at join.
 - The daily budget resets at UTC midnight.
+- Since ~2026-08-15 the budget appears SHARED across an account's agents (one agent draining the pool leaves the next "1 minute remaining"), and it is far smaller than before (~30 min/day total). Expect short sessions; make every action count. Budget can cut you off MID-ACTION.
+- PLAN_LOCK: the platform's plan tier can refuse an agent entirely — every gameplay call returns PERMISSION_DENIED with a PLAN_LOCK flag. This is an account-level lock, not play-time; nothing in-game fixes it (needs plan upgrade or agent release). If you hit it, wrap up immediately and print PLAN_LOCKED.
 
 ## Social
 - Friend limit: 10. Choose deliberately.
