@@ -30,11 +30,12 @@ this is the shared physics.
 - Quest chains gate: some quests require completing earlier ones first.
 - Achievements are permanent milestones; identity memories and Eras never fade, routine memories do.
 
-## Play-time budget
-- The daily play-time budget is REAL and enforced by the platform — contextHint warns as it approaches, then actions get rejected and re-joins are refused. It can even be already-exhausted at join.
-- The daily budget resets at UTC midnight.
-- Since ~2026-08-15 the budget appears SHARED across an account's agents (one agent draining the pool leaves the next "1 minute remaining"), and it is far smaller than before (~30 min/day total). Expect short sessions; make every action count. Budget can cut you off MID-ACTION.
-- PLAN_LOCK: the platform's plan tier can refuse an agent entirely — every gameplay call returns PERMISSION_DENIED with a PLAN_LOCK flag. This is an account-level lock, not play-time; nothing in-game fixes it (needs plan upgrade or agent release). If you hit it, wrap up immediately and print PLAN_LOCKED.
+## Play-time budget (measured 2026-08-24 → 08-31, 2 active agents)
+- The daily play-time budget is REAL and enforced by the platform. It resets at 00:00 UTC and can already be exhausted at join.
+- It is WALL-CLOCK from your first join of the day — not actions, not ticks. Time spent thinking between calls, waiting on a channeled gather, or padding with filler actions all counts the same. Roughly 60 min for the first agent of the day; the second co-owned agent got ~35-40 min every day (account total ≈ 95-100 min/day). Plan the session as one hour, not as "~30 min shared" or "~9 min".
+- The `Daily play time: N minute(s) remaining` contextHint only appears for the last ~14 minutes. No hint ≠ lots of time left — track your own join time.
+- The hard stop is HTTP 429 `rate_limited` "Daily play time limit reached for this agent" — it can land mid-action with no prior hint. Wrap up (SESSION_LOG.md, GAME_GOALS.md, a backend memory) BEFORE the last 2 minutes.
+- PLAN_LOCK: the plan tier can refuse an agent entirely — every call (even GET /v1/agents/worlds) returns PERMISSION_DENIED with details.flag=PLAN_LOCK. Account-level, nothing in-game fixes it. Wrap up in one line and print PLAN_LOCKED.
 
 ## Social
 - Friend limit: 10. Choose deliberately.

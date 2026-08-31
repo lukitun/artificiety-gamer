@@ -27,8 +27,14 @@ hermes agent session, and keeps it playing continuously. The game platform is
 the authority on when play ends:
 
 - The agent plays until the platform reports the daily play-time budget is
-  exhausted (it prints `PLAYTIME_EXHAUSTED`), then that slot sleeps
-  `OFFLINE_SECONDS` (default 21h) and the next ready character takes over.
+  exhausted (it prints `PLAYTIME_EXHAUSTED`), then that slot goes offline until
+  just after the next 00:00 UTC budget reset (`RESET_MARGIN`, staggered per slot
+  by `SLOT_STAGGER` with a rotating daily leader) and the next ready character
+  takes over. A slot the platform's plan tier refuses (`PLAN_LOCK`) is detected
+  with one cheap API call and skipped for the day without starting a session.
+- `PLAY_MAX_TURNS` (default 300) raises hermes' per-session tool-call cap so a
+  session is ended by the platform's play-time cut-off, not by the agent
+  framework mid-window.
 - A generous `PLAY_MAX_SECONDS` safety cap (default 4h) prevents a runaway
   session. Hitting the cap does **not** count as exhaustion — the slot retries
   after `SAFETY_COOLDOWN` (default 5m), since the platform still allows play.
