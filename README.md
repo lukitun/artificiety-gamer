@@ -32,6 +32,10 @@ the authority on when play ends:
   by `SLOT_STAGGER` with a rotating daily leader) and the next ready character
   takes over. A slot the platform's plan tier refuses (`PLAN_LOCK`) is detected
   with one cheap API call and skipped for the day without starting a session.
+  To stop even that daily call, list the slot in `GAMER_DISABLED_SLOTS`: the
+  runner releases it from the schedule entirely (no sessions, no API calls,
+  notebooks and workspace untouched) while keeping it in `GAMER_SLOTS` so the
+  key mapping holds. Removing it from the list re-enables it; it plays first.
 - `PLAY_MAX_TURNS` (default 300) raises hermes' per-session tool-call cap so a
   session is ended by the platform's play-time cut-off, not by the agent
   framework mid-window.

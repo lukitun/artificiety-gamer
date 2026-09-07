@@ -28,6 +28,21 @@ PLAY_MAX_TURNS="${PLAY_MAX_TURNS:-300}"
 # playstyle from gamer/strategy-<slot>.md.
 SLOTS="${GAMER_SLOTS:-exura merchant explorer}"
 
+# Slots released from the schedule (operator decision, e.g. PLAN_LOCK): the
+# runner never plays them and never touches the platform for them — not even
+# the plan_locked() pre-check. Their workspaces, notebooks and backend state
+# stay untouched, so removing a name from this list fully re-enables the slot
+# (its state file is gone, so it reads t=0 and plays first). Keep the slot in
+# GAMER_SLOTS: position there maps to GAMERn_API_KEY, so the list must not
+# shrink or reorder.
+DISABLED_SLOTS="${GAMER_DISABLED_SLOTS:-}"
+
+slot_disabled() {
+    local s
+    for s in $DISABLED_SLOTS; do [ "$s" = "$1" ] && return 0; done
+    return 1
+}
+
 log() { echo "[gamer] $(date -u '+%F %T') $*"; }
 
 key_for() {
@@ -193,10 +208,14 @@ next_window_after_reset() {
     now=$(date +%s)
     midnight=$(( (now / 86400 + 1) * 86400 ))
     day=$(( midnight / 86400 ))
+    # rotate the leader over ACTIVE slots only — counting released slots would
+    # leave dead stagger gaps after the reset and starve the leader rotation
     for s in $SLOTS; do
+        slot_disabled "$s" && continue
         [ "$s" = "$slot" ] && idx=$n
         n=$(( n + 1 ))
     done
+    [ "$n" -gt 0 ] || n=1
     echo $(( midnight + RESET_MARGIN + ( ( (idx - day) % n + n ) % n ) * SLOT_STAGGER ))
 }
 
@@ -278,6 +297,15 @@ play_window() {
 }
 
 for s in $SLOTS; do
+    if slot_disabled "$s"; then
+        # drop the schedule state file: anything that reads these files (e.g.
+        # an external maintenance job checking "is any slot due?") would see a
+        # stale past timestamp as due-forever. Deleting it is safe — on
+        # re-enable the slot reads t=0 and simply plays first.
+        rm -f "$(state_file "$s")"
+        log "slot $s: RELEASED from schedule (GAMER_DISABLED_SLOTS) — no sessions, no API calls; character state untouched"
+        continue
+    fi
     [ -z "$(key_for "$s")" ] && log "slot $s: NO API KEY set — slot disabled until key added to .env"
 done
 
@@ -296,6 +324,7 @@ while true; do
     # (never-played slots have t=0 and go first) — list order alone would let
     # a slot that keeps exiting via the safety cap starve everyone behind it
     for s in $SLOTS; do
+        slot_disabled "$s" && continue
         [ -z "$(key_for "$s")" ] && continue
         t=$(read_state "$s")
         if [ "$t" -le "$now" ]; then
