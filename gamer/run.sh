@@ -17,7 +17,7 @@ RESET_MARGIN="${RESET_MARGIN:-120}"                # start this long after the U
 SLOT_STAGGER="${SLOT_STAGGER:-300}"                # spacing between slots' due-times after the reset
 SAFETY_COOLDOWN="${SAFETY_COOLDOWN:-300}"
 COACH_MODEL="${COACH_MODEL:-nvidia/nemotron-3-super-120b-a12b}"
-COACH_TIMEOUT="${COACH_TIMEOUT:-600}"            # 5 min timed out ~1 in 4 coach runs on a 120B model
+COACH_TIMEOUT="${COACH_TIMEOUT:-900}"            # observed successes take 5-7 min; every hard failure was a pair of exact-600s timeouts
 # hermes ends a session after this many tool-calling turns (its default 90 cut
 # most play sessions mid-window, forcing a re-join that burns ~1-2 min of the
 # metered clock). The platform's own play-time cut-off is the real session end.
@@ -155,20 +155,31 @@ capture_transcript() {
         log "slot $slot: transcript digest FAILED — raw tail captured instead"
     fi
     rm -f "$raw" "$dir/LAST_SESSION_TRANSCRIPT.txt.tmp"
+    # A play window is usually several sessions (mid-window deaths force re-joins,
+    # ~2-3/day). The coach runs ONCE per window, after exhaustion — so a per-session
+    # LAST_SESSION_TRANSCRIPT.txt hands it only the final session, typically a
+    # 2-minute stub that joins and hits PLAYTIME_EXHAUSTED, and the window's real
+    # play never reaches the notebooks. Accumulate every session's digest here;
+    # play_window truncates it when the window opens.
+    { printf '\n===== session %s (%s) =====\n' "$sid" "$(date -u '+%F %T')"
+      cat "$dir/LAST_SESSION_TRANSCRIPT.txt"; } >> "$dir/WINDOW_TRANSCRIPT.txt"
+    if [ "$(wc -c < "$dir/WINDOW_TRANSCRIPT.txt")" -gt 150000 ]; then
+        tail -c 150000 "$dir/WINDOW_TRANSCRIPT.txt" > "$dir/wt.tmp" && mv "$dir/wt.tmp" "$dir/WINDOW_TRANSCRIPT.txt"
+    fi
 }
 
 run_coach() {
     local slot="$1"
     local dir="$WS/$slot"
-    [ -s "$dir/LAST_SESSION_OUTPUT.txt" ] || [ -s "$dir/LAST_SESSION_TRANSCRIPT.txt" ] || { log "slot $slot: no session output — coach skipped"; return; }
-    local attempt cout
+    [ -s "$dir/LAST_SESSION_OUTPUT.txt" ] || [ -s "$dir/WINDOW_TRANSCRIPT.txt" ] || { log "slot $slot: no session output — coach skipped"; return; }
+    local attempt cout crc
     for attempt in 1 2; do
         log "slot $slot: coach ($COACH_MODEL) distilling session (attempt $attempt)"
         cout=$(timeout "$COACH_TIMEOUT" hermes -m "$COACH_MODEL" -z "You are the strategy coach for a game-playing agent. FILES ONLY — you are FORBIDDEN from making any HTTP/network calls; do not touch the game API. Work only inside $dir using your file tools.
 
 Evidence to read, in order:
-- $dir/LAST_SESSION_TRANSCRIPT.txt — a readable digest of the session transcript (chronological messages, tool calls and results; the start may be trimmed). This is the primary evidence. Read it in chunks if needed — do NOT try to load the whole file into one tool call.
-- $dir/LAST_SESSION_OUTPUT.txt — only the agent's final message (often near-empty; a session that produced no final message crashed or was cut off — note that in the log entry).
+- $dir/WINDOW_TRANSCRIPT.txt — readable digests of EVERY session in today's play window, chronological, separated by '===== session' headers (a window is often one long session plus short re-join stubs; the long one carries the real lessons). This is the primary evidence. Read it in chunks if needed — do NOT try to load the whole file into one tool call.
+- $dir/LAST_SESSION_OUTPUT.txt — only the final session's last message (often near-empty; a session that produced no final message crashed or was cut off — note that in the log entry).
 - The existing notebooks GAME_GOALS.md, PLAYBOOK.md, GOTCHAS.md, SESSION_LOG.md in that directory.
 
 Then REWRITE THE FILES ON DISK with your file-editing tools — printing analysis as chat text does nothing and counts as total failure:
@@ -176,6 +187,7 @@ Then REWRITE THE FILES ON DISK with your file-editing tools — printing analysi
 - $dir/GOTCHAS.md — hard-won mechanical facts, deduplicated, max 60 lines.
 - $dir/GAME_GOALS.md — a concrete plan for the NEXT session, max 40 lines, MUST end with a line starting exactly 'EXACT FIRST ACTION:'.
 Also append a 3-6 line dated entry to $dir/SESSION_LOG.md summarizing what happened and what was learned. Be ruthless: keep only what changes future decisions. When done, print COACH_DONE." 2>&1)
+        crc=$?
         printf '%s\n' "$cout" >> "$dir/coach.log"
         if [ "$dir/GAME_GOALS.md" -nt "$dir/LAST_SESSION_OUTPUT.txt" ]; then
             log "slot $slot: coach finished (notebooks updated)"
@@ -183,8 +195,10 @@ Also append a 3-6 line dated entry to $dir/SESSION_LOG.md summarizing what happe
         fi
         # distinguish the failure modes (operator ask 2026-07-31): a model that
         # returned nothing is a different bug from one that wrote chat instead of files
-        if [ -z "$cout" ]; then
-            log "slot $slot: coach returned NO output — model error or timeout (attempt $attempt)"
+        if [ "$crc" -eq 124 ]; then
+            log "slot $slot: coach TIMED OUT after ${COACH_TIMEOUT}s (attempt $attempt)"
+        elif [ -z "$cout" ]; then
+            log "slot $slot: coach returned NO output (exit $crc) — model error (attempt $attempt)"
         elif printf '%s' "$cout" | grep -q 'COACH_DONE'; then
             log "slot $slot: coach printed COACH_DONE but notebooks unchanged — file writes failed (attempt $attempt)"
         else
@@ -242,6 +256,7 @@ play_window() {
     local start hard_end exhausted=0 locked=0 out rc left
     start=$(date +%s)
     hard_end=$(( start + MAX_WINDOW_SECONDS ))
+    : > "$dir/WINDOW_TRANSCRIPT.txt"   # fresh accumulator; capture_transcript appends each session
     log "slot $slot: play window open — safety cap at $(date -u -d "@$hard_end" '+%F %T') UTC"
 
     while [ "$(date +%s)" -lt "$hard_end" ]; do
